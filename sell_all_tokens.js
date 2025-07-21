@@ -1,7 +1,7 @@
 require('dotenv').config({ quiet: true });
 const apiKey = process.env.API_KEY;
 const usdcAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
-const wethAddress = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
+//const wethAddress = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';
 
 async function getBalances() {
   const url = 'https://api.sandbox.competitions.recall.network/api/agent/balances';
@@ -47,9 +47,9 @@ async function sellAllTokens() {
     const balances = await getBalances();
     for (const token of balances) {
       if (
-        token.tokenAddress.toLowerCase() !== usdcAddress.toLowerCase() && token.tokenAddress.toLowerCase() !== wethAddress.toLowerCase() &&
+        token.tokenAddress.toLowerCase() !== usdcAddress.toLowerCase() && /*token.tokenAddress.toLowerCase() !== wethAddress.toLowerCase() &&*/
         token.specificChain === 'eth' &&
-        Number(token.amount) > 2
+        Number(token.amount) > 0.000001
       ) {
         await sellToken(token.tokenAddress, token.amount);
       }

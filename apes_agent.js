@@ -4,7 +4,7 @@ require('dotenv').config({ quiet: true });
 const apiKey = process.env.API_KEY;
 
 // USDC token address for the chain you are trading on
-let quoteToken = '';//weth 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';//usdc '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+let quoteToken = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';//weth 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';//usdc '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 // Time (ms) between each trading cycle (how often to check for new pools)
 const int = 60000;
 // Time (ms) between each price check while holding a token
@@ -283,12 +283,12 @@ async function tradeBot() {
     if ((now - poolCreatedAt) > age * 60) { setTimeout(tradeBot, int); return; }
     //const reserve = Number(lastToken.attributes.reserve_in_usd);
     const tokenAddress = lastToken.relationships.base_token.data.id.substring(substr);
-    quoteToken = lastToken.relationships.quote_token.data.id.substring(substr);
+    //quoteToken = lastToken.relationships.quote_token.data.id.substring(substr);
     //console.log('Last token:', tokenAddress);
    // console.log('Reserve :', reserve);
    
     const price = Number(lastToken.attributes.base_token_price_usd);
-    if (price > 10 || price < 1e-14) {
+    if (price > 1e3 || price < 1e-13) {
       console.log(`Token price ${price}, skipping.`);
       setTimeout(tradeBot, int);
       return;
