@@ -87,7 +87,7 @@ async function getLastToken(retries = 3) {
   }
 }
 
-async function buyToken(tokenAddress, amount, retries = 5) {
+async function buyToken(tokenAddress, amount, retries = 6) {
 
   for (let i = 0; i < retries; i++) {
     try {
@@ -134,9 +134,13 @@ async function buyToken(tokenAddress, amount, retries = 5) {
 
       return result;
     } catch (err) {
-      console.error(`Attempt ${i+1} to buy token failed:`, '\x1b[37m' + err.message + '\x1b[0m');
+      //console.error(`Attempt ${i+1} to buy token failed:`, '\x1b[37m' + err.message + '\x1b[0m');
       if (i === retries - 1) {
-        console.log('All buy attempts failed, starting new cycle.');
+        console.log('All buy attempts failed, removing token from log and starting new cycle.');
+        // Remove from set and file if all attempts fail
+        const freshTokens = loadBoughtTokens();
+        freshTokens.delete(tokenAddress);
+        saveBoughtTokens(freshTokens);
         setTimeout(tradeBot, int);
         return { success: false, error: err, cycleRestarted: true };
       }
