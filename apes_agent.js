@@ -2,13 +2,13 @@
 // Your Recall Network API key
 const apiKey = '';
 // USDC token address for the chain you are trading on
-const usdcAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+let quoteToken = '';//weth 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';//usdc '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 // Time (ms) between each trading cycle (how often to check for new pools)
 const int = 60000;
 // Time (ms) between each price check while holding a token
 const monPrice = 15000;
 // Maximum pool age (minutes) to consider for trading (skip older pools)
-const age = 5; // min
+const age = 10; // min
 // === END CONFIGURATION ===
 
 const fs = require('fs');
@@ -50,6 +50,25 @@ let after = 0;
 // Track bought tokens to prevent duplicate buys in case of API delay or multi-terminal
 const boughtTokens = loadBoughtTokens();
 
+// === SPINNER UTILITY ===
+let spinnerInterval = null;
+let spinnerIndex = 0;
+const spinnerChars = ['|', '/', '-', '\\'];
+function startSpinner() {
+  if (spinnerInterval) return;
+  spinnerIndex = 0;
+  spinnerInterval = setInterval(() => {
+    process.stdout.write(`\r${spinnerChars[spinnerIndex++ % spinnerChars.length]} Trading cycle active...`);
+  }, 100);
+}
+function stopSpinner() {
+  if (spinnerInterval) {
+    clearInterval(spinnerInterval);
+    spinnerInterval = null;
+    process.stdout.write('\r\x1b[2K'); // Clear the line
+  }
+}
+
 async function getLastToken(retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -72,7 +91,7 @@ async function buyToken(tokenAddress, amount, retries = 3) {
     try {
       const url = 'https://api.sandbox.competitions.recall.network/api/trade/execute';
       const body = {
-        fromToken: usdcAddress,
+        fromToken: quoteToken,
         toToken: tokenAddress,
         amount: amount,
         reason: "Apes Autonomous",
@@ -92,9 +111,9 @@ async function buyToken(tokenAddress, amount, retries = 3) {
         body: JSON.stringify(body)
       });
       const result = await response.json();
-     console.log(result)
+     //console.log(result)
       befor = Number(result.transaction.fromAmount)
-      console.log('\x1b[1m[BUY] \x1b[0m', result.transaction.toToken, ' with ', '\x1b[32m' + result.transaction.fromAmount + ' USDC\x1b[0m');
+      console.log('\x1b[1m[BUY] \x1b[0mFrom: ', result.transaction.fromToken, ' To: ', result.transaction.toToken, ' with ', '\x1b[32m' + result.transaction.fromAmount + '\x1b[0m');
       
 
       //const balances = await getBalances();
@@ -151,7 +170,7 @@ async function sellToken(tokenAddress, reason = "", retries = 3) {
       const url = 'https://api.sandbox.competitions.recall.network/api/trade/execute';
       const body = {
         fromToken: tokenAddress,
-        toToken: usdcAddress,
+        toToken: quoteToken,
         amount: actualAmount.toString(),
         reason: reason || "Stop-loss or take-profit triggered.",
         slippageTolerance: "0.5",
@@ -173,13 +192,13 @@ async function sellToken(tokenAddress, reason = "", retries = 3) {
       
       if (result.transaction) {
         after = Number(result.transaction.toAmount);
-        console.log(`\x1b[1m[SELL]\x1b[0m (${reason}) `, result.transaction.fromToken, ' for ', '\x1b[31m' + result.transaction.toAmount + ' USDC\x1b[0m');
+        console.log(`\x1b[1m[SELL]\x1b[0m (${reason}) From: `, result.transaction.fromToken, ' To: result.transaction.toToken', ' for ', '\x1b[31m' + result.transaction.toAmount + '\x1b[0m');
       //  console.log('Received:', '\x1b[32m' + result.transaction.toAmount + '\x1b[0m', 'USDC');
         const pnl = after - befor;
-        if (pnl > 10000) {console.log('\x1b[44m\x1b[1m\x1b[36mPnL: ', pnl, ' USDC\x1b[0m');}
-        else if (pnl >= 0) {console.log('\x1b[1m\x1b[36mPnL: ', pnl, ' USDC\x1b[0m');}
+        if (pnl > 10000) {console.log('\x1b[44m\x1b[1m\x1b[36mPnL: ', pnl, '\x1b[0m');}
+        else if (pnl >= 0) {console.log('\x1b[1m\x1b[36mPnL: ', pnl, '\x1b[0m');}
         else {
-        console.log('\x1b[1m\x1b[35mPnL: ', pnl, ' USDC\x1b[0m');
+        console.log('\x1b[1m\x1b[35mPnL: ', pnl, '\x1b[0m');
         }
        // console.log('toAmount (USDC): ', '\x1b[36m' + result.transaction.toAmount + '\x1b[0m');
       } else {
@@ -239,6 +258,8 @@ async function getEntryPrice(tokenAddress, retries = 5, delay = 10000) {
 }
 
 async function tradeBot() {
+  stopSpinner(); // Stop any previous spinner
+  startSpinner();
   befor = 0; after = 0;
   actualAmount = 0
   if (isActive) {
@@ -253,8 +274,9 @@ async function tradeBot() {
     const poolCreatedAt = Date.parse(lastToken.attributes.pool_created_at) / 1000;
     //console.log(now - poolCreatedAt);
     if ((now - poolCreatedAt) > age * 60) { setTimeout(tradeBot, int); return; }
-    const reserve = Number(lastToken.attributes.reserve_in_usd);
+    //const reserve = Number(lastToken.attributes.reserve_in_usd);
     const tokenAddress = lastToken.relationships.base_token.data.id.substring(substr);
+    quoteToken = lastToken.relationships.quote_token.data.id.substring(substr);
     //console.log('Last token:', tokenAddress);
    // console.log('Reserve :', reserve);
     const price = Number(lastToken.attributes.base_token_price_usd);
@@ -281,9 +303,10 @@ async function tradeBot() {
     let buyTries = 0;
     const maxBuyTries = 3;
     for (const addr of balances) {
-      if (addr.tokenAddress == usdcAddress) {
+      if (addr.tokenAddress == quoteToken) {
         const amount = addr.amount * 0.1;
-        console.log('Balance (USDC): ', '\x1b[1m' + addr.amount + '\x1b[0m');
+        stopSpinner(); 
+        console.log('Balance: ', '\x1b[1m' + addr.amount + '\x1b[0m');
         // No need to write to file here, already handled above
         while (buyTries < maxBuyTries) {
           buyData = await buyToken(tokenAddress, amount);
