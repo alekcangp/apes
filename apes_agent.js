@@ -1,6 +1,8 @@
 // === CONFIGURATION ===
 // Your Recall Network API key
-const apiKey = '';
+require('dotenv').config({ quiet: true });
+const apiKey = process.env.API_KEY;
+
 // USDC token address for the chain you are trading on
 let quoteToken = '';//weth 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';//usdc '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 // Time (ms) between each trading cycle (how often to check for new pools)
@@ -8,7 +10,7 @@ const int = 60000;
 // Time (ms) between each price check while holding a token
 const monPrice = 15000;
 // Maximum pool age (minutes) to consider for trading (skip older pools)
-const age = 10; // min
+const age = 5; // min
 // === END CONFIGURATION ===
 
 const fs = require('fs');
@@ -85,7 +87,7 @@ async function getLastToken(retries = 3) {
   }
 }
 
-async function buyToken(tokenAddress, amount, retries = 3) {
+async function buyToken(tokenAddress, amount, retries = 5) {
 
   for (let i = 0; i < retries; i++) {
     try {
@@ -270,6 +272,7 @@ async function tradeBot() {
   
   try {
     const lastToken = await getLastToken();
+    //console.log(lastToken)
     const now = Date.now() / 1000;
     const poolCreatedAt = Date.parse(lastToken.attributes.pool_created_at) / 1000;
     //console.log(now - poolCreatedAt);
@@ -279,8 +282,9 @@ async function tradeBot() {
     quoteToken = lastToken.relationships.quote_token.data.id.substring(substr);
     //console.log('Last token:', tokenAddress);
    // console.log('Reserve :', reserve);
+   
     const price = Number(lastToken.attributes.base_token_price_usd);
-    if (price > 1 || price < 1e-14) {
+    if (price > 10 || price < 1e-14) {
       console.log(`Token price ${price}, skipping.`);
       setTimeout(tradeBot, int);
       return;
@@ -295,7 +299,7 @@ async function tradeBot() {
       freshTokens.add(tokenAddress);
       saveBoughtTokens(freshTokens);
     }
-
+    
     const balancesResult = await getBalances();
     if (balancesResult && balancesResult.cycleRestarted) return;
     const balances = balancesResult.balances || balancesResult;

@@ -18,22 +18,27 @@ Automated trading bot for any token on Ethereum, Solana, and compatible EVM chai
 - Node.js (v18+ recommended)
 - Access to the Recall Network API (API key required)
 
-## Setup
-1. **Clone the repository**
+## Setup & Run
+1. **Clone the repository and install dependencies**
    ```sh
    git clone https://github.com/alekcangp/apes.git
    cd apes
+   npm install
    ```
 2. **Configure your API key and trading parameters**
-   - Open `apes_agent.js` and set your `apiKey` variable to your Recall Network API key.
-   - Adjust other configuration variables at the top of the file (slippage, intervals, etc.) as needed.
+   - Create a `.env` file in the project root with your Recall Network API key:
+     ```
+     API_KEY=your_actual_api_key_here
+     ```
+   - Open `apes_agent.js` and adjust other configuration variables at the top of the file (slippage, intervals, etc.) as needed.
+3. **Run the bot**
+   ```sh
+   node apes_agent.js
+   ```
 
-
-## Usage
-Run the bot:
-```sh
-node apes_agent.js
-```
+**Troubleshooting:**
+- If you see `API_KEY` is undefined, make sure your `.env` file is in the same directory where you run the script.
+- The variable name in `.env` must be exactly `API_KEY` (all caps, no spaces).
 
 ## Customization
 - Adjust trading parameters (slippage, monitoring interval, etc.) at the top of `apes_agent.js`.
