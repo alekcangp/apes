@@ -194,7 +194,7 @@ async function sellToken(tokenAddress, reason = "", retries = 3) {
       
       if (result.transaction) {
         after = Number(result.transaction.toAmount);
-        console.log(`\x1b[1m[SELL]\x1b[0m (${reason}) From: `, result.transaction.fromToken, ' To: result.transaction.toToken', ' for ', '\x1b[31m' + result.transaction.toAmount + '\x1b[0m');
+        console.log(`\x1b[1m[SELL]\x1b[0m (${reason}) From: `, result.transaction.fromToken, ' To: ', result.transaction.toToken, ' for ', '\x1b[31m' + result.transaction.toAmount + '\x1b[0m');
       //  console.log('Received:', '\x1b[32m' + result.transaction.toAmount + '\x1b[0m', 'USDC');
         const pnl = after - befor;
         if (pnl > 10000) {console.log('\x1b[44m\x1b[1m\x1b[36mPnL: ', pnl, '\x1b[0m');}
