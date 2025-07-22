@@ -169,7 +169,7 @@ async function monitorPrice(tokenAddress, retries = 3) {
   }
 }
 
-async function sellToken(tokenAddress, reason = "", retries = 3) {
+async function sellToken(tokenAddress, reason = "", retries = 5) {
   for (let i = 0; i < retries; i++) {
     try {
      
