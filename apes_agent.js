@@ -5,12 +5,13 @@ const apiKey = process.env.API_KEY;
 
 // USDC token address for the chain you are trading on
 let quoteToken = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';//weth 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2';//usdc '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+
 // Time (ms) between each trading cycle (how often to check for new pools)
-const int = 60000;
+const int = 15000;
 // Time (ms) between each price check while holding a token
-const monPrice = 15000;
+const monPrice = 60000;
 // Maximum pool age (minutes) to consider for trading (skip older pools)
-const age = 5; // min
+const age = 168; // min
 // === END CONFIGURATION ===
 
 const fs = require('fs');
@@ -74,10 +75,12 @@ function stopSpinner() {
 async function getLastToken(retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
-      const url = `https://api.geckoterminal.com/api/v2/networks/${chain}/new_pools?page=1`;
+      const page = Math.floor(Math.random() * 2) + 1
+      const url = `https://api.geckoterminal.com/api/v2/networks/${chain}/trending_pools?page=${page}&duration=5m`;//`https://api.geckoterminal.com/api/v2/networks/${chain}/new_pools?page=1`;
       const response = await fetch(url);
       const data = await response.json();
-      return data.data[0];
+      const rand = Math.floor(Math.random() * 9)
+      return data.data[rand];
     } catch (err) {
       const shortMsg = err.code ? err.code : err.name;
       console.error(`Attempt ${i+1} failed:`, '\x1b[37m' + shortMsg + '\x1b[0m');
@@ -87,17 +90,17 @@ async function getLastToken(retries = 3) {
   }
 }
 
-async function buyToken(tokenAddress, amount, retries = 6) {
-
+async function buyToken(tokenAddress, amount, retries = 3) {
+console.log(tokenAddress, ' ', amount)
   for (let i = 0; i < retries; i++) {
     try {
-      const url = 'https://api.sandbox.competitions.recall.network/api/trade/execute';
+      const url = 'https://api.competitions.recall.network/api/trade/execute';
       const body = {
         fromToken: quoteToken,
-        toToken: tokenAddress,
+        toToken: tokenAddress.toLowerCase(),
         amount: amount,
         reason: "Apes Autonomous",
-        slippageTolerance: "0.5",
+        slippageTolerance: "0.1",
         fromChain: chainId,
         fromSpecificChain: specChain,
         toChain: chainId,
@@ -113,7 +116,8 @@ async function buyToken(tokenAddress, amount, retries = 6) {
         body: JSON.stringify(body)
       });
       const result = await response.json();
-     //console.log(result)
+     console.log(result)
+    // if (result.error == 'Unable to determine price for tokens') {return 'Unable price'}
       befor = Number(result.transaction.fromAmount)
       console.log('\x1b[1m[BUY] \x1b[0mFrom: ', result.transaction.fromToken, ' To: ', result.transaction.toToken, ' with ', '\x1b[32m' + result.transaction.fromAmount + '\x1b[0m');
       
@@ -136,11 +140,11 @@ async function buyToken(tokenAddress, amount, retries = 6) {
     } catch (err) {
       //console.error(`Attempt ${i+1} to buy token failed:`, '\x1b[37m' + err.message + '\x1b[0m');
       if (i === retries - 1) {
-        console.log('All buy attempts failed, removing token from log and starting new cycle.');
+        console.log('All buy attempts failed');
         // Remove from set and file if all attempts fail
-        const freshTokens = loadBoughtTokens();
-        freshTokens.delete(tokenAddress);
-        saveBoughtTokens(freshTokens);
+      //  const freshTokens = loadBoughtTokens();
+      //  freshTokens.delete(tokenAddress);
+       // saveBoughtTokens(freshTokens);
         setTimeout(tradeBot, int);
         return { success: false, error: err, cycleRestarted: true };
       }
@@ -152,7 +156,7 @@ async function buyToken(tokenAddress, amount, retries = 6) {
 async function monitorPrice(tokenAddress, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
-      const url = `https://api.sandbox.competitions.recall.network/api/price?token=${tokenAddress}&chain=${chainId}&specificChain=${specChain}`;
+      const url = `https://api.competitions.recall.network/api/price?token=${tokenAddress}&chain=${chainId}&specificChain=${specChain}`;
       const response = await fetch(url, {
         headers: {
           'accept': 'application/json',
@@ -173,13 +177,13 @@ async function sellToken(tokenAddress, reason = "", retries = 5) {
   for (let i = 0; i < retries; i++) {
     try {
      
-      const url = 'https://api.sandbox.competitions.recall.network/api/trade/execute';
+      const url = 'https://api.competitions.recall.network/api/trade/execute';
       const body = {
-        fromToken: tokenAddress,
+        fromToken: tokenAddress.toLowerCase(),
         toToken: quoteToken,
         amount: actualAmount.toString(),
         reason: reason || "Stop-loss or take-profit triggered.",
-        slippageTolerance: "0.5",
+        slippageTolerance: "0.1",
         fromChain: chainId,
         fromSpecificChain: specChain,
         toChain: chainId,
@@ -199,18 +203,23 @@ async function sellToken(tokenAddress, reason = "", retries = 5) {
       if (result.transaction) {
         after = Number(result.transaction.toAmount);
         console.log(`\x1b[1m[SELL]\x1b[0m (${reason}) From: `, result.transaction.fromToken, ' To: ', result.transaction.toToken, ' for ', '\x1b[31m' + result.transaction.toAmount + '\x1b[0m');
-      //  console.log('Received:', '\x1b[32m' + result.transaction.toAmount + '\x1b[0m', 'USDC');
         const pnl = after - befor;
         if (pnl > 10000) {console.log('\x1b[44m\x1b[1m\x1b[36mPnL: ', pnl, '\x1b[0m');}
         else if (pnl >= 0) {console.log('\x1b[1m\x1b[36mPnL: ', pnl, '\x1b[0m');}
         else {
         console.log('\x1b[1m\x1b[35mPnL: ', pnl, '\x1b[0m');
         }
-       // console.log('toAmount (USDC): ', '\x1b[36m' + result.transaction.toAmount + '\x1b[0m');
+        return result;
       } else {
         console.error('Sell failed or no transaction returned:', result);
+        if (i === retries - 1) {
+          console.log('All sell attempts failed, starting new cycle.');
+          setTimeout(tradeBot, int);
+          return { success: false, error: 'No transaction returned', cycleRestarted: true };
+        }
+        await new Promise(res => setTimeout(res, 20000));
+        continue;
       }
-      return result;
     } catch (err) {
       console.error(`Attempt ${i+1} to sell token failed:`, '\x1b[37m' + err.name + '\x1b[0m');
       if (i === retries - 1) {
@@ -226,7 +235,7 @@ async function sellToken(tokenAddress, reason = "", retries = 5) {
 async function getBalances(retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
-      const url = 'https://api.sandbox.competitions.recall.network/api/agent/balances';
+      const url = 'https://api.competitions.recall.network/api/agent/balances';
       const response = await fetch(url, {
         headers: {
           'accept': 'application/json',
@@ -247,10 +256,10 @@ async function getBalances(retries = 3) {
   }
 }
 
-async function getEntryPrice(tokenAddress, retries = 5, delay = 10000) {
+async function getEntryPrice(tokenAddress, retries = 5, delay = 20000) {
   for (let i = 0; i < retries; i++) {
     try {
-      const price = await monitorPrice(tokenAddress);
+      const price = await monitorPrice(tokenAddress.toLowerCase());
       if (price) return price;
     } catch (err) {}
     if (i < retries - 1) {
@@ -276,34 +285,47 @@ async function tradeBot() {
   
   try {
     const lastToken = await getLastToken();
-    //console.log(lastToken)
+    console.log(lastToken.relationships.base_token.data.id.substring(substr))
+    console.log(lastToken.relationships.quote_token.data.id.substring(substr))
     const now = Date.now() / 1000;
     const poolCreatedAt = Date.parse(lastToken.attributes.pool_created_at) / 1000;
     //console.log(now - poolCreatedAt);
-    if ((now - poolCreatedAt) > age * 60) { setTimeout(tradeBot, int); return; }
+    if ((now - poolCreatedAt) < age * 60 * 60) { console.log('Young pool.'); setTimeout(tradeBot, int); return; }
+    if (lastToken.attributes.volume_usd.h24 < 100000) { console.log('Low volume.'); setTimeout(tradeBot, int); return; }
     //const reserve = Number(lastToken.attributes.reserve_in_usd);
-    const tokenAddress = lastToken.relationships.base_token.data.id.substring(substr);
+    const tokenAddress = lastToken.relationships.base_token.data.id.substring(substr).toLowerCase();
+    if (tokenAddress == '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48') { console.log('Identical'); setTimeout(tradeBot, int); return; }
+    if (tokenAddress == '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2') { console.log('WETH'); setTimeout(tradeBot, int); return; }
+    if (tokenAddress == '0x6b175474e89094c44da98b954eedeac495271d0f') { console.log('DAI'); setTimeout(tradeBot, int); return; }
+    if (tokenAddress == '0x57ab1ec28d129707052df4df418d58a2d46d5f51') { console.log('sUSD'); setTimeout(tradeBot, int); return; }
+    
+   
     //quoteToken = lastToken.relationships.quote_token.data.id.substring(substr);
     //console.log('Last token:', tokenAddress);
    // console.log('Reserve :', reserve);
    
     const price = Number(lastToken.attributes.base_token_price_usd);
-    if (price > 1e3 || price < 1e-13) {
+    if (price > 1 || price < 1e-13) {
       console.log(`Token price ${price}, skipping.`);
       setTimeout(tradeBot, int);
       return;
     }
 
-    // Always reload bought tokens from file before checking
+    /* Always reload bought tokens from file before checking
     const freshTokens = loadBoughtTokens();
     if (freshTokens.has(tokenAddress)) {
+      console.log('Exist token.')
       setTimeout(tradeBot, int);
       return;
     } else {
       freshTokens.add(tokenAddress);
       saveBoughtTokens(freshTokens);
     }
-    
+*/
+    const rprice = await monitorPrice(tokenAddress.toLowerCase());
+        if (!rprice) { console.log('Unable price'); setTimeout(tradeBot, 5000); return;}
+
+  console.log('\nPrice: ',rprice)  
     const balancesResult = await getBalances();
     if (balancesResult && balancesResult.cycleRestarted) return;
     const balances = balancesResult.balances || balancesResult;
@@ -311,14 +333,19 @@ async function tradeBot() {
     let buyTries = 0;
     const maxBuyTries = 3;
     for (const addr of balances) {
-      if (addr.tokenAddress == quoteToken) {
+      if (addr.tokenAddress.toLowerCase() == quoteToken.toLowerCase()) {
         const amount = addr.amount * 0.1;
         stopSpinner(); 
         console.log('Balance: ', '\x1b[1m' + addr.amount + '\x1b[0m');
+
+       
         // No need to write to file here, already handled above
         while (buyTries < maxBuyTries) {
-          buyData = await buyToken(tokenAddress, amount);
-          if (buyData && buyData.cycleRestarted) return;
+          console.log('Buy... ')
+          buyData = await buyToken(tokenAddress.toLowerCase(), amount);
+         // if (buyData == 'Unable price') { console.log('Unable price'); setTimeout(tradeBot, 5000); return; }
+         console.log('Completed.')
+         if (buyData && buyData.cycleRestarted) return;
           if (buyData && buyData.success !== false) {
             break;
           } else if (buyData && buyData.cycleRestarted) {
@@ -331,7 +358,7 @@ async function tradeBot() {
               await new Promise(res => setTimeout(res, 20000));
             } else {
               // Remove from set and file if all attempts fail
-              freshTokens.delete(tokenAddress);
+              freshTokens.delete(tokenAddress.toLowerCase());
               saveBoughtTokens(freshTokens);
               console.log('Removed token from boughtTokens due to repeated buy failure:', tokenAddress);
             }
@@ -349,32 +376,32 @@ async function tradeBot() {
     let entryPrice;
     let entryPriceResult;
     try {
-      entryPriceResult = await getEntryPrice(tokenAddress, 3, 10000);
+      entryPriceResult = await getEntryPrice(tokenAddress.toLowerCase(), 5, 20000);
       if (entryPriceResult && entryPriceResult.cycleRestarted) return;
       entryPrice = entryPriceResult.price !== undefined ? entryPriceResult.price : entryPriceResult;
     } catch (err) {
       console.log(`Error: \x1b[37m${err.name}\x1b[0m`);
-      const sellResult = await sellToken(tokenAddress, "entry-price-error");
+      const sellResult = await sellToken(tokenAddress.toLowerCase(), "entry-price-error");
       if (sellResult && sellResult.cycleRestarted) return;
       return tradeBot();
     }
     if (!entryPrice) {
       console.log('Entry price not found after retries, selling token.');
-      const sellResult = await sellToken(tokenAddress, "entry-price-missing");
+      const sellResult = await sellToken(tokenAddress.toLowerCase(), "entry-price-missing");
       if (sellResult && sellResult.cycleRestarted) return;
       return tradeBot();
     }
-    const stopLoss = entryPrice * 0.9;
-    const takeProfit = entryPrice * 1.2;
+    const stopLoss = entryPrice * 0.975;
+    const takeProfit = entryPrice * 1.05;
     console.log(`Entry: ${entryPrice}`);//, Stop-loss: ${stopLoss}, Take-profit: ${takeProfit}`);
     if (entryPrice <= stopLoss) {
       console.log('Stop-loss triggered immediately after buy! Selling...');
-      const sellResult = await sellToken(tokenAddress, "stop-loss");
+      const sellResult = await sellToken(tokenAddress.toLowerCase(), "stop-loss");
       if (sellResult && sellResult.cycleRestarted) return;
       return tradeBot();
     } else if (entryPrice >= takeProfit) {
       console.log('Take-profit triggered immediately after buy! Selling...');
-      const sellResult = await sellToken(tokenAddress, "take-profit");
+      const sellResult = await sellToken(tokenAddress.toLowerCase(), "take-profit");
       if (sellResult && sellResult.cycleRestarted) return;
       return tradeBot();
     }
@@ -382,12 +409,13 @@ async function tradeBot() {
     const interval = setInterval(async () => {
       if (positionClosed) return;
       try {
-        const price = await monitorPrice(tokenAddress);
+        const price = await monitorPrice(tokenAddress.toLowerCase());
+        console.log('Price: ', price)
         if (!price) return;
         if (price <= stopLoss) {
           positionClosed = true;
           console.log('Stop-loss triggered! Selling...');
-          const sellResult = await sellToken(tokenAddress, "stop-loss");
+          const sellResult = await sellToken(tokenAddress.toLowerCase(), "stop-loss");
           if (sellResult && sellResult.cycleRestarted) return;
           clearInterval(interval);
           clearTimeout(closeTimeout);
@@ -395,7 +423,7 @@ async function tradeBot() {
         } else if (price >= takeProfit) {
           positionClosed = true;
           console.log('Take-profit triggered! Selling...');
-          const sellResult = await sellToken(tokenAddress, "take-profit");
+          const sellResult = await sellToken(tokenAddress.toLowerCase(), "take-profit");
           if (sellResult && sellResult.cycleRestarted) return;
           clearInterval(interval);
           clearTimeout(closeTimeout);
@@ -411,11 +439,11 @@ async function tradeBot() {
       if (positionClosed) return;
       positionClosed = true;
       console.log('Timeout passed, closing position...');
-      const sellResult = await sellToken(tokenAddress, "timeout");
+      const sellResult = await sellToken(tokenAddress.toLowerCase(), "timeout");
       if (sellResult && sellResult.cycleRestarted) return;
       clearInterval(interval);
       tradeBot();
-    }, (Math.floor(Math.random() * 6) + 5) * 60 * 1000);
+    }, (Math.floor(Math.random() * 16) + 15) * 60 * 1000);
   } catch (err) {
     console.log(`Error: \x1b[37m${err.name}\x1b[0m`);
   } finally {
